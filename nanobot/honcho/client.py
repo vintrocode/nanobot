@@ -40,9 +40,11 @@ class HonchoClient:
 
     def _get_or_create_peer(self, peer_id: str, observe_me: bool = True) -> Any:
         """Get or create a peer by ID."""
+        from honcho.peer import PeerConfig
+
         if peer_id not in self._peers:
-            config = {"observe_me": observe_me}
-            self._peers[peer_id] = self._honcho.peer(peer_id, config=config)
+            config = PeerConfig(observe_me=observe_me)
+            self._peers[peer_id] = self._honcho.peer(peer_id, configuration=config)
             logger.debug(f"Created Honcho peer: {peer_id} (observe_me={observe_me})")
         return self._peers[peer_id]
 
