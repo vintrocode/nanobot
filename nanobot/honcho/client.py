@@ -67,7 +67,7 @@ class HonchoClient:
         Returns:
             Honcho session object
         """
-        from honcho import SessionPeerConfig
+        from honcho.session import SessionPeerConfig
 
         if session_key not in self._sessions:
             session = self._honcho.session(session_key)
