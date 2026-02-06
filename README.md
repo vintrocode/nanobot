@@ -119,10 +119,18 @@ nanobot onboard
       "search": {
         "apiKey": "BSA-xxx"
       }
+    },
+    "honcho": {
+      "enabled": true,
+      "apiKey": "YOUR_HONCHO_API_KEY",
+      "workspaceId": "nanobot",
+      "environment": "production"
     }
   }
 }
 ```
+
+> Get a Honcho API key at [app.honcho.dev](https://app.honcho.dev) for persistent user memory.
 
 
 **3. Chat**
@@ -360,6 +368,7 @@ Config file: `~/.nanobot/config.json`
 | `deepseek` | LLM (DeepSeek direct) | [platform.deepseek.com](https://platform.deepseek.com) |
 | `groq` | LLM + **Voice transcription** (Whisper) | [console.groq.com](https://console.groq.com) |
 | `gemini` | LLM (Gemini direct) | [aistudio.google.com](https://aistudio.google.com) |
+| `honcho` | **Persistent user memory** | [app.honcho.dev](https://app.honcho.dev) |
 
 
 ### Security
