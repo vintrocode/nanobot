@@ -210,6 +210,7 @@ def gateway(
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        honcho_config=config.tools.honcho,
     )
     
     # Set cron callback (needs agent)
@@ -318,6 +319,7 @@ def agent(
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        honcho_config=config.tools.honcho,
     )
     
     if message:
@@ -663,6 +665,11 @@ def status():
         console.print(f"Gemini API: {'[green]✓[/green]' if has_gemini else '[dim]not set[/dim]'}")
         vllm_status = f"[green]✓ {config.providers.vllm.api_base}[/green]" if has_vllm else "[dim]not set[/dim]"
         console.print(f"vLLM/Local: {vllm_status}")
+
+        # Honcho status
+        honcho_enabled = config.tools.honcho.enabled and config.tools.honcho.api_key
+        honcho_status = f"[green]✓ {config.tools.honcho.workspace_id}[/green]" if honcho_enabled else "[dim]disabled[/dim]"
+        console.print(f"Honcho Memory: {honcho_status}")
 
 
 if __name__ == "__main__":

@@ -102,10 +102,19 @@ class ExecToolConfig(BaseModel):
     timeout: int = 60
 
 
+class HonchoConfig(BaseModel):
+    """Honcho memory configuration."""
+    enabled: bool = False
+    api_key: str = ""  # API key from app.honcho.dev
+    workspace_id: str = "nanobot"  # Single workspace for the entire app
+    environment: str = "production"  # "production" or "demo"
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    honcho: HonchoConfig = Field(default_factory=HonchoConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
 
 

@@ -18,6 +18,7 @@ from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.cron import CronTool
+from nanobot.agent.tools.honcho import HonchoTool
 from nanobot.agent.subagent import SubagentManager
 from nanobot.session.manager import SessionManager
 
@@ -45,8 +46,9 @@ class AgentLoop:
         exec_config: "ExecToolConfig | None" = None,
         cron_service: "CronService | None" = None,
         restrict_to_workspace: bool = False,
+        honcho_config: "HonchoConfig | None" = None,
     ):
-        from nanobot.config.schema import ExecToolConfig
+        from nanobot.config.schema import ExecToolConfig, HonchoConfig
         from nanobot.cron.service import CronService
         self.bus = bus
         self.provider = provider
@@ -57,7 +59,8 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
-        
+        self.honcho_config = honcho_config or HonchoConfig()
+
         self.context = ContextBuilder(workspace)
         self.sessions = SessionManager(workspace)
         self.tools = ToolRegistry()
@@ -70,7 +73,18 @@ class AgentLoop:
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
         )
-        
+
+        # Initialize Honcho client if enabled
+        self.honcho_client = None
+        if self.honcho_config.enabled and self.honcho_config.api_key:
+            from nanobot.honcho.client import HonchoClient
+            self.honcho_client = HonchoClient(
+                workspace_id=self.honcho_config.workspace_id,
+                api_key=self.honcho_config.api_key,
+                environment=self.honcho_config.environment,
+            )
+            logger.info("Honcho memory integration enabled")
+
         self._running = False
         self._register_default_tools()
     
@@ -105,6 +119,10 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+        # Honcho tool (for user context queries)
+        if self.honcho_client:
+            self.tools.register(HonchoTool(self.honcho_client))
     
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
@@ -172,7 +190,12 @@ class AgentLoop:
         cron_tool = self.tools.get("cron")
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(msg.channel, msg.chat_id)
-        
+
+        # Set Honcho tool context (use sender_id as user peer ID)
+        honcho_tool = self.tools.get("honcho_query")
+        if isinstance(honcho_tool, HonchoTool):
+            honcho_tool.set_context(msg.sender_id)
+
         # Build initial messages (use get_history for LLM-formatted messages)
         messages = self.context.build_messages(
             history=session.get_history(),
@@ -234,7 +257,19 @@ class AgentLoop:
         session.add_message("user", msg.content)
         session.add_message("assistant", final_content)
         self.sessions.save(session)
-        
+
+        # Store messages to Honcho for memory
+        if self.honcho_client:
+            try:
+                self.honcho_client.add_messages(
+                    session_key=msg.session_key,
+                    user_id=msg.sender_id,
+                    user_content=msg.content,
+                    assistant_content=final_content,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to store messages to Honcho: {e}")
+
         return OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
