@@ -106,16 +106,6 @@ I am nanobot, a lightweight AI assistant.
 - User privacy and safety
 - Transparency in actions
 """,
-        "USER.md": """# User
-
-Information about the user goes here.
-
-## Preferences
-
-- Communication style: (casual/formal)
-- Timezone: (your timezone)
-- Language: (your preferred language)
-""",
     }
     
     for filename, content in templates.items():
