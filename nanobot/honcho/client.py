@@ -33,7 +33,7 @@ class HonchoClient:
         # Cache for sessions (session_key -> Session)
         self._sessions: dict[str, Any] = {}
 
-        # Create the nanobot AI peer (not observed)
+        # Create the nanobot AI peer (observed)
         self._assistant_peer = None
 
         logger.info(f"Honcho client initialized for workspace: {workspace_id}")
@@ -51,9 +51,9 @@ class HonchoClient:
         return self._get_or_create_peer(user_id, observe_me=True)
 
     def get_assistant_peer(self) -> Any:
-        """Get or create the nanobot assistant peer (not observed)."""
+        """Get or create the nanobot assistant peer (observed)."""
         if self._assistant_peer is None:
-            self._assistant_peer = self._get_or_create_peer("nanobot", observe_me=False)
+            self._assistant_peer = self._get_or_create_peer("nanobot", observe_me=True)
         return self._assistant_peer
 
     def get_or_create_session(self, session_key: str, user_id: str) -> Any:
@@ -78,8 +78,8 @@ class HonchoClient:
 
             # User is observed (Honcho builds a model of them)
             user_config = SessionPeerConfig(observe_me=True, observe_others=True)
-            # AI is NOT observed (no model built of the AI)
-            ai_config = SessionPeerConfig(observe_me=False, observe_others=True)
+            # AI is also observed (Honcho builds a model of the assistant too)
+            ai_config = SessionPeerConfig(observe_me=True, observe_others=True)
 
             session.add_peers([
                 (user_peer, user_config),

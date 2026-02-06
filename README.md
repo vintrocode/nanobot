@@ -382,6 +382,39 @@ Config file: `~/.nanobot/config.json`
 | `channels.*.allowFrom` | `[]` (allow all) | Whitelist of user IDs. Empty = allow everyone; non-empty = only listed users can interact. |
 
 
+### Honcho Memory
+
+[Honcho](https://honcho.dev) provides persistent, cross-session memory for nanobot. When enabled, nanobot learns about users over time and remembers context across conversations.
+
+**How it works:**
+
+1. **Peers** — Honcho tracks both users and the nanobot assistant as "peers". Both are observed, so Honcho builds models of user preferences and AI behavior.
+2. **Sessions** — Each conversation (`channel:chat_id`) maps to a Honcho session. Message exchanges are stored after each turn.
+3. **Memory queries** — The agent has a `honcho_query` tool to ask questions about the user on-demand, e.g. "What communication style does this user prefer?" or "What are this user's goals?"
+
+**Configuration:**
+
+```json
+{
+  "tools": {
+    "honcho": {
+      "enabled": true,
+      "apiKey": "YOUR_HONCHO_API_KEY",
+      "workspaceId": "nanobot",
+      "environment": "production"
+    }
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable Honcho memory integration |
+| `apiKey` | `""` | API key from [app.honcho.dev](https://app.honcho.dev) |
+| `workspaceId` | `"nanobot"` | Honcho workspace identifier |
+| `environment` | `"production"` | `"production"` or `"demo"` |
+
+
 ## CLI Reference
 
 | Command | Description |
@@ -446,12 +479,13 @@ nanobot/
 │   ├── memory.py   #    Persistent memory
 │   ├── skills.py   #    Skills loader
 │   ├── subagent.py #    Background task execution
-│   └── tools/      #    Built-in tools (incl. spawn)
+│   └── tools/      #    Built-in tools (incl. spawn, honcho)
 ├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
 ├── channels/       # 📱 WhatsApp integration
 ├── bus/            # 🚌 Message routing
 ├── cron/           # ⏰ Scheduled tasks
 ├── heartbeat/      # 💓 Proactive wake-up
+├── honcho/         # 🧠 Honcho memory integration
 ├── providers/      # 🤖 LLM providers (OpenRouter, etc.)
 ├── session/        # 💬 Conversation sessions
 ├── config/         # ⚙️ Configuration
