@@ -4,10 +4,13 @@ import base64
 import mimetypes
 import platform
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.skills import SkillsLoader
+
+if TYPE_CHECKING:
+    from nanobot.honcho.session import HonchoSessionManager
 
 
 class ContextBuilder:
@@ -20,23 +23,33 @@ class ContextBuilder:
     
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
     
-    def __init__(self, workspace: Path):
+    def __init__(
+        self,
+        workspace: Path,
+        honcho_session_manager: "HonchoSessionManager | None" = None,
+    ):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
+        self.honcho_session_manager = honcho_session_manager
     
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
+    def build_system_prompt(
+        self,
+        skill_names: list[str] | None = None,
+        user_context: dict[str, str] | None = None,
+    ) -> str:
         """
         Build the system prompt from bootstrap files, memory, and skills.
-        
+
         Args:
             skill_names: Optional list of skills to include.
-        
+            user_context: Optional pre-fetched user context from Honcho.
+
         Returns:
             Complete system prompt.
         """
         parts = []
-        
+
         # Core identity
         parts.append(self._get_identity())
         
@@ -49,6 +62,28 @@ class ContextBuilder:
         memory = self.memory.get_memory_context()
         if memory:
             parts.append(f"# Memory\n\n{memory}")
+
+        # Honcho user context (pre-fetched)
+        if user_context:
+            context_parts = []
+            if user_context.get("communication_style"):
+                context_parts.append(
+                    f"- Communication style: {user_context['communication_style']}"
+                )
+            if user_context.get("expertise_level"):
+                context_parts.append(
+                    f"- Expertise level: {user_context['expertise_level']}"
+                )
+            if user_context.get("goals"):
+                context_parts.append(f"- Current goals: {user_context['goals']}")
+            if user_context.get("preferences"):
+                context_parts.append(f"- Key preferences: {user_context['preferences']}")
+            if context_parts:
+                parts.append(
+                    "# User Context (from Honcho)\n\n"
+                    + "\n".join(context_parts)
+                    + "\n\nYou can use the query_user_context tool for more specific questions about this user."
+                )
         
         # Skills - progressive loading
         # 1. Always-loaded skills: include full content
@@ -126,6 +161,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         media: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
+        user_context: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Build the complete message list for an LLM call.
@@ -137,6 +173,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
             media: Optional list of local file paths for images/media.
             channel: Current channel (telegram, feishu, etc.).
             chat_id: Current chat/user ID.
+            user_context: Optional pre-fetched user context from Honcho.
 
         Returns:
             List of messages including system prompt.
@@ -144,7 +181,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         messages = []
 
         # System prompt
-        system_prompt = self.build_system_prompt(skill_names)
+        system_prompt = self.build_system_prompt(skill_names, user_context=user_context)
         if channel and chat_id:
             system_prompt += f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
         messages.append({"role": "system", "content": system_prompt})

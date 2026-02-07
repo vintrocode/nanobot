@@ -70,6 +70,9 @@ def onboard():
     console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
     console.print("  2. Chat: [cyan]nanobot agent -m \"Hello!\"[/cyan]")
+    console.print("\n[dim]Optional: Enable Honcho for AI-native memory[/dim]")
+    console.print("[dim]  Get API key at: https://app.honcho.dev[/dim]")
+    console.print("[dim]  Set: export HONCHO_API_KEY=your-key[/dim]")
     console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
 
 
@@ -210,6 +213,8 @@ def gateway(
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        honcho_enabled=config.honcho.enabled,
+        honcho_prefetch=config.honcho.prefetch,
     )
     
     # Set cron callback (needs agent)
@@ -318,6 +323,8 @@ def agent(
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        honcho_enabled=config.honcho.enabled,
+        honcho_prefetch=config.honcho.prefetch,
     )
     
     if message:
@@ -663,6 +670,17 @@ def status():
         console.print(f"Gemini API: {'[green]✓[/green]' if has_gemini else '[dim]not set[/dim]'}")
         vllm_status = f"[green]✓ {config.providers.vllm.api_base}[/green]" if has_vllm else "[dim]not set[/dim]"
         console.print(f"vLLM/Local: {vllm_status}")
+
+        # Check Honcho status
+        import os
+        has_honcho_key = bool(os.environ.get("HONCHO_API_KEY"))
+        honcho_enabled = config.honcho.enabled and has_honcho_key
+        if honcho_enabled:
+            console.print(f"Honcho: [green]✓ enabled[/green] (workspace: {config.honcho.workspace_id})")
+        elif config.honcho.enabled:
+            console.print(f"Honcho: [yellow]! HONCHO_API_KEY not set[/yellow]")
+        else:
+            console.print(f"Honcho: [dim]disabled[/dim]")
 
 
 if __name__ == "__main__":

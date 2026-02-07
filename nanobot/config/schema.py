@@ -102,6 +102,14 @@ class ExecToolConfig(BaseModel):
     timeout: int = 60
 
 
+class HonchoConfig(BaseModel):
+    """Honcho AI-native memory configuration."""
+    enabled: bool = True  # Enable Honcho integration (requires HONCHO_API_KEY env var)
+    workspace_id: str = "nanobot"  # Honcho workspace identifier
+    prefetch: bool = True  # Pre-fetch user context before LLM calls
+    environment: str = "production"  # Honcho environment (production/development)
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
@@ -116,6 +124,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    honcho: HonchoConfig = Field(default_factory=HonchoConfig)
     
     @property
     def workspace_path(self) -> Path:

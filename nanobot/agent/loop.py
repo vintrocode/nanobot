@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +19,8 @@ from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.cron import CronTool
+from nanobot.agent.tools.honcho import HonchoTool
 from nanobot.agent.subagent import SubagentManager
-from nanobot.session.manager import SessionManager
 
 
 class AgentLoop:
@@ -45,6 +46,8 @@ class AgentLoop:
         exec_config: "ExecToolConfig | None" = None,
         cron_service: "CronService | None" = None,
         restrict_to_workspace: bool = False,
+        honcho_enabled: bool = True,
+        honcho_prefetch: bool = True,
     ):
         from nanobot.config.schema import ExecToolConfig
         from nanobot.cron.service import CronService
@@ -57,9 +60,14 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
-        
-        self.context = ContextBuilder(workspace)
-        self.sessions = SessionManager(workspace)
+        self.honcho_enabled = honcho_enabled and bool(os.environ.get("HONCHO_API_KEY"))
+        self.honcho_prefetch = honcho_prefetch
+
+        # Initialize session manager (Honcho or fallback)
+        self.sessions: Any = None
+        self._init_session_manager()
+
+        self.context = ContextBuilder(workspace, honcho_session_manager=self.sessions if self.honcho_enabled else None)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
             provider=provider,
@@ -70,9 +78,26 @@ class AgentLoop:
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
         )
-        
+
         self._running = False
         self._register_default_tools()
+
+    def _init_session_manager(self) -> None:
+        """Initialize the appropriate session manager."""
+        if self.honcho_enabled:
+            try:
+                from nanobot.honcho.session import HonchoSessionManager
+                self.sessions = HonchoSessionManager()
+                logger.info("Using Honcho for session management")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Honcho, falling back to local sessions: {e}")
+                from nanobot.session.manager import SessionManager
+                self.sessions = SessionManager(self.workspace)
+                self.honcho_enabled = False
+        else:
+            from nanobot.session.manager import SessionManager
+            self.sessions = SessionManager(self.workspace)
+            logger.info("Using local file-based session management")
     
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -105,6 +130,13 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+        # Honcho tool (for querying user context)
+        if self.honcho_enabled:
+            from nanobot.honcho.session import HonchoSessionManager
+            if isinstance(self.sessions, HonchoSessionManager):
+                honcho_tool = HonchoTool(session_manager=self.sessions)
+                self.tools.register(honcho_tool)
     
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
@@ -172,7 +204,22 @@ class AgentLoop:
         cron_tool = self.tools.get("cron")
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(msg.channel, msg.chat_id)
-        
+
+        # Update Honcho tool context
+        honcho_tool = self.tools.get("query_user_context")
+        if isinstance(honcho_tool, HonchoTool):
+            honcho_tool.set_context(msg.session_key)
+
+        # Pre-fetch user context from Honcho if enabled
+        user_context = None
+        if self.honcho_enabled and self.honcho_prefetch:
+            from nanobot.honcho.session import HonchoSessionManager
+            if isinstance(self.sessions, HonchoSessionManager):
+                try:
+                    user_context = self.sessions.get_prefetch_context(msg.session_key)
+                except Exception as e:
+                    logger.warning(f"Failed to pre-fetch Honcho context: {e}")
+
         # Build initial messages (use get_history for LLM-formatted messages)
         messages = self.context.build_messages(
             history=session.get_history(),
@@ -180,6 +227,7 @@ class AgentLoop:
             media=msg.media if msg.media else None,
             channel=msg.channel,
             chat_id=msg.chat_id,
+            user_context=user_context,
         )
         
         # Agent loop
@@ -276,13 +324,29 @@ class AgentLoop:
         cron_tool = self.tools.get("cron")
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(origin_channel, origin_chat_id)
-        
+
+        # Update Honcho tool context
+        honcho_tool = self.tools.get("query_user_context")
+        if isinstance(honcho_tool, HonchoTool):
+            honcho_tool.set_context(session_key)
+
+        # Pre-fetch user context from Honcho if enabled
+        user_context = None
+        if self.honcho_enabled and self.honcho_prefetch:
+            from nanobot.honcho.session import HonchoSessionManager
+            if isinstance(self.sessions, HonchoSessionManager):
+                try:
+                    user_context = self.sessions.get_prefetch_context(session_key)
+                except Exception as e:
+                    logger.warning(f"Failed to pre-fetch Honcho context: {e}")
+
         # Build messages with the announce content
         messages = self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
             channel=origin_channel,
             chat_id=origin_chat_id,
+            user_context=user_context,
         )
         
         # Agent loop (limited for announce handling)

@@ -81,6 +81,21 @@ spawn(task: str, label: str = None) -> str
 
 Use for complex or time-consuming tasks that can run independently. The subagent will complete the task and report back when done.
 
+## Memory
+
+### honcho_query
+Query Honcho's persistent memory about the user.
+```
+honcho_query(query: str) -> str
+```
+
+Use to recall user preferences, past context, or biographical information that Honcho has learned over time. Memory is automatically updated from conversations — no manual storage needed.
+
+**Example queries:**
+- "What are the user's communication preferences?"
+- "What projects has the user mentioned working on?"
+- "Does the user have any dietary restrictions?"
+
 ## Scheduled Reminders (Cron)
 
 Use the `exec` tool to create scheduled reminders with `nanobot cron add`:
