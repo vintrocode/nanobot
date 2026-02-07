@@ -144,6 +144,11 @@ class HonchoSessionManager:
         self._sessions_cache[session_id] = session
         return session
 
+    def _sanitize_id(self, id_str: str) -> str:
+        """Sanitize an ID to match Honcho's pattern: ^[a-zA-Z0-9_-]+"""
+        # Replace colons and other invalid chars with dashes
+        return id_str.replace(":", "-").replace(".", "-").replace(" ", "-")
+
     def get_or_create(self, key: str) -> HonchoSession:
         """
         Get an existing session or create a new one.
@@ -163,9 +168,12 @@ class HonchoSessionManager:
         channel = parts[0] if len(parts) > 1 else "default"
         chat_id = parts[1] if len(parts) > 1 else key
 
-        # Create peer IDs
-        user_peer_id = f"user-{channel}-{chat_id}"
+        # Create peer IDs (sanitized for Honcho's ID pattern)
+        user_peer_id = self._sanitize_id(f"user-{channel}-{chat_id}")
         assistant_peer_id = "nanobot-assistant"
+
+        # Sanitize session ID for Honcho
+        honcho_session_id = self._sanitize_id(key)
 
         # Get or create peers
         user_peer = self._get_or_create_peer(user_peer_id, is_assistant=False)
@@ -173,7 +181,7 @@ class HonchoSessionManager:
 
         # Get or create Honcho session
         honcho_session = self._get_or_create_honcho_session(
-            key, user_peer, assistant_peer
+            honcho_session_id, user_peer, assistant_peer
         )
 
         # Create local session wrapper
@@ -181,7 +189,7 @@ class HonchoSessionManager:
             key=key,
             user_peer_id=user_peer_id,
             assistant_peer_id=assistant_peer_id,
-            honcho_session_id=key,
+            honcho_session_id=honcho_session_id,
         )
 
         self._cache[key] = session
@@ -205,11 +213,11 @@ class HonchoSessionManager:
         assistant_peer = self._get_or_create_peer(
             session.assistant_peer_id, is_assistant=True
         )
-        honcho_session = self._sessions_cache.get(session.key)
+        honcho_session = self._sessions_cache.get(session.honcho_session_id)
 
         if not honcho_session:
             honcho_session = self._get_or_create_honcho_session(
-                session.key, user_peer, assistant_peer
+                session.honcho_session_id, user_peer, assistant_peer
             )
 
         # Convert messages to Honcho format and send
