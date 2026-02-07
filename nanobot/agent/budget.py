@@ -4,11 +4,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-# Default pricing per 1M tokens (Claude Opus 4.5)
-DEFAULT_INPUT_PRICE_PER_MILLION = 15.0
-DEFAULT_OUTPUT_PRICE_PER_MILLION = 75.0
-
-
 @dataclass
 class SpendBudget:
     """
@@ -22,8 +17,6 @@ class SpendBudget:
     spent_dollars: float = 0.0
     input_tokens: int = 0
     output_tokens: int = 0
-    input_price_per_million: float = DEFAULT_INPUT_PRICE_PER_MILLION
-    output_price_per_million: float = DEFAULT_OUTPUT_PRICE_PER_MILLION
     _calls: list[dict[str, Any]] = field(default_factory=list)
 
     @property
@@ -43,22 +36,22 @@ class SpendBudget:
             return 0.0
         return self.spent_dollars / self.max_spend_dollars
 
-    def add_usage(self, input_tokens: int, output_tokens: int, source: str = "agent") -> float:
+    def add_cost(
+        self,
+        cost: float,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        source: str = "agent",
+    ) -> None:
         """
-        Add token usage and return cost of this call.
+        Add cost from an LLM response.
 
         Args:
+            cost: Cost in dollars (from LLMResponse.cost)
             input_tokens: Number of input/prompt tokens
             output_tokens: Number of output/completion tokens
             source: Label for tracking (e.g., "agent", "subagent:task_id")
-
-        Returns:
-            Cost of this call in dollars
         """
-        input_cost = (input_tokens / 1_000_000) * self.input_price_per_million
-        output_cost = (output_tokens / 1_000_000) * self.output_price_per_million
-        cost = input_cost + output_cost
-
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
         self.spent_dollars += cost
@@ -69,8 +62,6 @@ class SpendBudget:
             "output_tokens": output_tokens,
             "cost": cost,
         })
-
-        return cost
 
     def get_summary(self) -> str:
         """Get a human-readable summary of spend."""

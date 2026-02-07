@@ -45,8 +45,6 @@ class AgentLoop:
         model: str | None = None,
         max_iterations: int = 20,
         max_spend_dollars: float | None = None,
-        input_price_per_million: float = 15.0,
-        output_price_per_million: float = 75.0,
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         cron_service: "CronService | None" = None,
@@ -63,8 +61,6 @@ class AgentLoop:
         self.model = model or provider.get_default_model()
         self.max_iterations = max_iterations
         self.max_spend_dollars = max_spend_dollars
-        self.input_price_per_million = input_price_per_million
-        self.output_price_per_million = output_price_per_million
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
@@ -265,11 +261,7 @@ class AgentLoop:
         # Create budget tracker for this request
         budget = None
         if self.max_spend_dollars:
-            budget = SpendBudget(
-                max_spend_dollars=self.max_spend_dollars,
-                input_price_per_million=self.input_price_per_million,
-                output_price_per_million=self.output_price_per_million,
-            )
+            budget = SpendBudget(max_spend_dollars=self.max_spend_dollars)
             # Pass budget to subagent manager
             self.subagents.set_shared_budget(budget)
 
@@ -294,10 +286,11 @@ class AgentLoop:
             )
 
             # Track spend
-            if budget and response.usage:
-                budget.add_usage(
-                    response.usage.get("prompt_tokens", 0),
-                    response.usage.get("completion_tokens", 0),
+            if budget:
+                budget.add_cost(
+                    cost=response.cost,
+                    input_tokens=response.usage.get("prompt_tokens", 0) if response.usage else 0,
+                    output_tokens=response.usage.get("completion_tokens", 0) if response.usage else 0,
                     source="agent",
                 )
                 logger.debug(f"Budget: {budget.get_summary()}")

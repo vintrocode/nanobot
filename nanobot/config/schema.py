@@ -57,16 +57,9 @@ class AgentDefaults(BaseModel):
     max_spend_dollars: float | None = None  # Max spend per request (None = unlimited)
 
 
-class PricingConfig(BaseModel):
-    """Model pricing configuration (per 1M tokens)."""
-    input_price: float = 15.0  # Claude Opus 4.5 default
-    output_price: float = 75.0
-
-
 class AgentsConfig(BaseModel):
     """Agent configuration."""
     defaults: AgentDefaults = Field(default_factory=AgentDefaults)
-    pricing: PricingConfig = Field(default_factory=PricingConfig)
 
 
 class ProviderConfig(BaseModel):

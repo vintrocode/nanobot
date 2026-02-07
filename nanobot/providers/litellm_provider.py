@@ -175,12 +175,20 @@ class LiteLLMProvider(LLMProvider):
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,
             }
-        
+
+        # Calculate cost using litellm's built-in pricing
+        cost = 0.0
+        try:
+            cost = litellm.completion_cost(completion_response=response)
+        except Exception:
+            pass  # Cost calculation failed, use 0
+
         return LLMResponse(
             content=message.content,
             tool_calls=tool_calls,
             finish_reason=choice.finish_reason or "stop",
             usage=usage,
+            cost=cost,
         )
     
     def get_default_model(self) -> str:

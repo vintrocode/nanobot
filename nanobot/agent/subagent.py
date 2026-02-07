@@ -163,10 +163,11 @@ class SubagentManager:
                 )
 
                 # Track spend in shared budget
-                if self._shared_budget and response.usage:
-                    self._shared_budget.add_usage(
-                        response.usage.get("prompt_tokens", 0),
-                        response.usage.get("completion_tokens", 0),
+                if self._shared_budget:
+                    self._shared_budget.add_cost(
+                        cost=response.cost,
+                        input_tokens=response.usage.get("prompt_tokens", 0) if response.usage else 0,
+                        output_tokens=response.usage.get("completion_tokens", 0) if response.usage else 0,
                         source=f"subagent:{task_id}",
                     )
                     logger.debug(f"Subagent [{task_id}] budget: {self._shared_budget.get_summary()}")
