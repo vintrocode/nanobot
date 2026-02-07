@@ -288,36 +288,39 @@ class HonchoSessionManager:
 
     def get_prefetch_context(self, session_key: str) -> dict[str, str]:
         """
-        Pre-fetch common user context attributes.
+        Pre-fetch user context using Honcho's context() method.
+
+        This is a single API call that returns the user's representation
+        and peer card, much faster than multiple chat() calls.
 
         Args:
             session_key: The session key to get context for.
 
         Returns:
-            Dictionary of user context attributes.
+            Dictionary with 'representation' and 'card' keys.
         """
         session = self._cache.get(session_key)
         if not session:
             return {}
 
-        user_peer = self._get_or_create_peer(session.user_peer_id, is_assistant=False)
+        honcho_session = self._sessions_cache.get(session.honcho_session_id)
+        if not honcho_session:
+            return {}
 
-        context = {}
-        queries = {
-            "communication_style": "What communication style does this user prefer? Be concise.",
-            "expertise_level": "What is this user's technical expertise level? Be concise.",
-            "goals": "What are this user's current goals or priorities? Be concise.",
-            "preferences": "What key preferences should I know about this user? Be concise.",
-        }
-
-        for key, query in queries.items():
-            try:
-                context[key] = user_peer.chat(query)
-            except Exception as e:
-                logger.warning(f"Failed to fetch {key} from Honcho: {e}")
-                context[key] = ""
-
-        return context
+        try:
+            # Single API call to get user representation
+            ctx = honcho_session.context(
+                peer_target=session.user_peer_id,
+                summary=True,
+            )
+            return {
+                "representation": ctx.peer_representation or "",
+                "card": ctx.peer_card or "",
+                "summary": ctx.summary or "",
+            }
+        except Exception as e:
+            logger.warning(f"Failed to fetch context from Honcho: {e}")
+            return {}
 
     def list_sessions(self) -> list[dict[str, Any]]:
         """

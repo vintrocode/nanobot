@@ -64,25 +64,19 @@ class ContextBuilder:
             if memory:
                 parts.append(f"# Memory\n\n{memory}")
 
-        # Honcho user context (pre-fetched)
+        # Honcho user context (pre-fetched via single context() call)
         if user_context:
             context_parts = []
-            if user_context.get("communication_style"):
-                context_parts.append(
-                    f"- Communication style: {user_context['communication_style']}"
-                )
-            if user_context.get("expertise_level"):
-                context_parts.append(
-                    f"- Expertise level: {user_context['expertise_level']}"
-                )
-            if user_context.get("goals"):
-                context_parts.append(f"- Current goals: {user_context['goals']}")
-            if user_context.get("preferences"):
-                context_parts.append(f"- Key preferences: {user_context['preferences']}")
+            if user_context.get("representation"):
+                context_parts.append(f"## User Representation\n{user_context['representation']}")
+            if user_context.get("card"):
+                context_parts.append(f"## User Card\n{user_context['card']}")
+            if user_context.get("summary"):
+                context_parts.append(f"## Conversation Summary\n{user_context['summary']}")
             if context_parts:
                 parts.append(
                     "# User Context (from Honcho)\n\n"
-                    + "\n".join(context_parts)
+                    + "\n\n".join(context_parts)
                     + "\n\nYou can use the query_user_context tool for more specific questions about this user."
                 )
         

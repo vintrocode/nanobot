@@ -106,7 +106,7 @@ class HonchoConfig(BaseModel):
     """Honcho AI-native memory configuration."""
     enabled: bool = True  # Enable Honcho integration (requires HONCHO_API_KEY env var)
     workspace_id: str = "nanobot"  # Honcho workspace identifier
-    prefetch: bool = True  # Pre-fetch user context before LLM calls
+    prefetch: bool = True  # Pre-fetch user context before LLM calls (single fast context() call)
     environment: str = "production"  # Honcho environment (production/development)
 
 
