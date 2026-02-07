@@ -64,15 +64,13 @@ class ContextBuilder:
             if memory:
                 parts.append(f"# Memory\n\n{memory}")
 
-        # Honcho user context (pre-fetched via single context() call)
+        # Honcho user context (pre-fetched via single context() call with semantic search)
         if user_context:
             context_parts = []
             if user_context.get("representation"):
                 context_parts.append(f"## User Representation\n{user_context['representation']}")
             if user_context.get("card"):
                 context_parts.append(f"## User Card\n{user_context['card']}")
-            if user_context.get("summary"):
-                context_parts.append(f"## Conversation Summary\n{user_context['summary']}")
             if context_parts:
                 parts.append(
                     "# User Context (from Honcho)\n\n"

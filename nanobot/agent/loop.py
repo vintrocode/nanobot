@@ -48,6 +48,7 @@ class AgentLoop:
         restrict_to_workspace: bool = False,
         honcho_enabled: bool = True,
         honcho_prefetch: bool = True,
+        honcho_context_tokens: int | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         from nanobot.cron.service import CronService
@@ -62,6 +63,7 @@ class AgentLoop:
         self.restrict_to_workspace = restrict_to_workspace
         self.honcho_enabled = honcho_enabled and bool(os.environ.get("HONCHO_API_KEY"))
         self.honcho_prefetch = honcho_prefetch
+        self.honcho_context_tokens = honcho_context_tokens
 
         # Initialize session manager (Honcho or fallback)
         self.sessions: Any = None
@@ -87,7 +89,7 @@ class AgentLoop:
         if self.honcho_enabled:
             try:
                 from nanobot.honcho.session import HonchoSessionManager
-                self.sessions = HonchoSessionManager()
+                self.sessions = HonchoSessionManager(context_tokens=self.honcho_context_tokens)
                 logger.info("Using Honcho for session management")
             except Exception as e:
                 logger.warning(f"Failed to initialize Honcho, falling back to local sessions: {e}")
@@ -221,7 +223,7 @@ class AgentLoop:
             from nanobot.honcho.session import HonchoSessionManager
             if isinstance(self.sessions, HonchoSessionManager):
                 try:
-                    user_context = self.sessions.get_prefetch_context(msg.session_key)
+                    user_context = self.sessions.get_prefetch_context(msg.session_key, msg.content)
                 except Exception as e:
                     logger.warning(f"Failed to pre-fetch Honcho context: {e}")
 
@@ -341,7 +343,7 @@ class AgentLoop:
             from nanobot.honcho.session import HonchoSessionManager
             if isinstance(self.sessions, HonchoSessionManager):
                 try:
-                    user_context = self.sessions.get_prefetch_context(session_key)
+                    user_context = self.sessions.get_prefetch_context(session_key, msg.content)
                 except Exception as e:
                     logger.warning(f"Failed to pre-fetch Honcho context: {e}")
 

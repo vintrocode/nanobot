@@ -215,8 +215,9 @@ def gateway(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         honcho_enabled=config.honcho.enabled,
         honcho_prefetch=config.honcho.prefetch,
+        honcho_context_tokens=config.honcho.context_tokens,
     )
-    
+
     # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
@@ -325,8 +326,9 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         honcho_enabled=config.honcho.enabled,
         honcho_prefetch=config.honcho.prefetch,
+        honcho_context_tokens=config.honcho.context_tokens,
     )
-    
+
     if message:
         # Single message mode
         async def run_once():

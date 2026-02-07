@@ -72,14 +72,16 @@ class HonchoSessionManager:
     AI-native memory system for user modeling.
     """
 
-    def __init__(self, honcho: Honcho | None = None):
+    def __init__(self, honcho: Honcho | None = None, context_tokens: int | None = None):
         """
         Initialize the session manager.
 
         Args:
             honcho: Optional Honcho client. If not provided, uses the singleton.
+            context_tokens: Max tokens for context() calls (None = Honcho default).
         """
         self._honcho = honcho
+        self._context_tokens = context_tokens
         self._cache: dict[str, HonchoSession] = {}
         self._peers_cache: dict[str, Any] = {}
         self._sessions_cache: dict[str, Any] = {}
@@ -145,7 +147,7 @@ class HonchoSessionManager:
         # Load existing messages via context() - single call for messages + metadata
         existing_messages = []
         try:
-            ctx = session.context(summary=True)
+            ctx = session.context(summary=True, tokens=self._context_tokens)
             existing_messages = ctx.messages or []
             if existing_messages:
                 logger.info(f"Honcho session '{session_id}' retrieved ({len(existing_messages)} existing messages)")
@@ -311,15 +313,16 @@ class HonchoSessionManager:
             logger.error(f"Failed to get user context from Honcho: {e}")
             return f"Unable to retrieve user context: {e}"
 
-    def get_prefetch_context(self, session_key: str) -> dict[str, str]:
+    def get_prefetch_context(self, session_key: str, user_message: str | None = None) -> dict[str, str]:
         """
         Pre-fetch user context using Honcho's context() method.
 
         This is a single API call that returns the user's representation
-        and peer card, much faster than multiple chat() calls.
+        and peer card, using semantic search based on the user's message.
 
         Args:
             session_key: The session key to get context for.
+            user_message: The user's message for semantic search.
 
         Returns:
             Dictionary with 'representation' and 'card' keys.
@@ -333,15 +336,16 @@ class HonchoSessionManager:
             return {}
 
         try:
-            # Single API call to get user representation
+            # Single API call to get user representation with semantic search
             ctx = honcho_session.context(
+                summary=False,
+                tokens=self._context_tokens,
                 peer_target=session.user_peer_id,
-                summary=True,
+                search_query=user_message,
             )
             return {
                 "representation": ctx.peer_representation or "",
                 "card": ctx.peer_card or "",
-                "summary": ctx.summary or "",
             }
         except Exception as e:
             logger.warning(f"Failed to fetch context from Honcho: {e}")
