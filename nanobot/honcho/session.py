@@ -131,20 +131,10 @@ class HonchoSessionManager:
         """
         if session_id in self._sessions_cache:
             logger.debug(f"Honcho session '{session_id}' retrieved from cache")
-            return self._sessions_cache[session_id]
+            return self._sessions_cache[session_id], []
 
         # Pass metadata={} to trigger get-or-create behavior
         session = self.honcho.session(session_id, metadata={})
-
-        # Check if session has existing messages to determine if new or existing
-        try:
-            existing_messages = list(session.messages())
-            if existing_messages:
-                logger.info(f"Honcho session '{session_id}' retrieved ({len(existing_messages)} existing messages)")
-            else:
-                logger.info(f"Honcho session '{session_id}' created (new)")
-        except Exception:
-            logger.info(f"Honcho session '{session_id}' loaded")
 
         # Configure peer observation settings
         user_config = SessionPeerConfig(observe_me=True, observe_others=True)
@@ -152,8 +142,20 @@ class HonchoSessionManager:
 
         session.add_peers([(user_peer, user_config), (assistant_peer, ai_config)])
 
+        # Load existing messages via context() - single call for messages + metadata
+        existing_messages = []
+        try:
+            ctx = session.context(summary=True)
+            existing_messages = ctx.messages or []
+            if existing_messages:
+                logger.info(f"Honcho session '{session_id}' retrieved ({len(existing_messages)} existing messages)")
+            else:
+                logger.info(f"Honcho session '{session_id}' created (new)")
+        except Exception as e:
+            logger.warning(f"Honcho session '{session_id}' loaded (failed to fetch context: {e})")
+
         self._sessions_cache[session_id] = session
-        return session
+        return session, existing_messages
 
     def _sanitize_id(self, id_str: str) -> str:
         """Sanitize an ID to match Honcho's pattern: ^[a-zA-Z0-9_-]+"""
@@ -192,16 +194,28 @@ class HonchoSessionManager:
         assistant_peer = self._get_or_create_peer(assistant_peer_id, is_assistant=True)
 
         # Get or create Honcho session
-        honcho_session = self._get_or_create_honcho_session(
+        honcho_session, existing_messages = self._get_or_create_honcho_session(
             honcho_session_id, user_peer, assistant_peer
         )
 
-        # Create local session wrapper
+        # Convert Honcho messages to local format
+        local_messages = []
+        for msg in existing_messages:
+            role = "assistant" if msg.peer_id == assistant_peer_id else "user"
+            local_messages.append({
+                "role": role,
+                "content": msg.content,
+                "timestamp": msg.created_at.isoformat() if msg.created_at else "",
+                "_synced": True,  # Already in Honcho
+            })
+
+        # Create local session wrapper with existing messages
         session = HonchoSession(
             key=key,
             user_peer_id=user_peer_id,
             assistant_peer_id=assistant_peer_id,
             honcho_session_id=honcho_session_id,
+            messages=local_messages,
         )
 
         self._cache[key] = session
