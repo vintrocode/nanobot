@@ -130,10 +130,21 @@ class HonchoSessionManager:
             The Honcho session object.
         """
         if session_id in self._sessions_cache:
+            logger.debug(f"Honcho session '{session_id}' retrieved from cache")
             return self._sessions_cache[session_id]
 
         # Pass metadata={} to trigger get-or-create behavior
         session = self.honcho.session(session_id, metadata={})
+
+        # Check if session has existing messages to determine if new or existing
+        try:
+            existing_messages = list(session.messages())
+            if existing_messages:
+                logger.info(f"Honcho session '{session_id}' retrieved ({len(existing_messages)} existing messages)")
+            else:
+                logger.info(f"Honcho session '{session_id}' created (new)")
+        except Exception:
+            logger.info(f"Honcho session '{session_id}' loaded")
 
         # Configure peer observation settings
         user_config = SessionPeerConfig(observe_me=True, observe_others=True)
@@ -160,6 +171,7 @@ class HonchoSessionManager:
             The session.
         """
         if key in self._cache:
+            logger.debug(f"Local session cache hit: {key}")
             return self._cache[key]
 
         # Parse key to extract user identifier
@@ -193,7 +205,6 @@ class HonchoSessionManager:
         )
 
         self._cache[key] = session
-        logger.debug(f"Created Honcho session: {key}")
         return session
 
     def save(self, session: HonchoSession) -> None:
