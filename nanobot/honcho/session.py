@@ -109,7 +109,8 @@ class HonchoSessionManager:
         if is_assistant:
             peer = self.honcho.peer(peer_id, configuration=PeerConfig(observe_me=False))
         else:
-            peer = self.honcho.peer(peer_id)
+            # Pass metadata={} to trigger get-or-create behavior
+            peer = self.honcho.peer(peer_id, metadata={})
 
         self._peers_cache[cache_key] = peer
         return peer
@@ -131,7 +132,8 @@ class HonchoSessionManager:
         if session_id in self._sessions_cache:
             return self._sessions_cache[session_id]
 
-        session = self.honcho.session(session_id)
+        # Pass metadata={} to trigger get-or-create behavior
+        session = self.honcho.session(session_id, metadata={})
 
         # Configure peer observation settings
         user_config = SessionPeerConfig(observe_me=True, observe_others=True)
