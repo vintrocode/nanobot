@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from honcho import Honcho
+from honcho.peer import PeerConfig
 from honcho.session import SessionPeerConfig
 from loguru import logger
 
@@ -106,7 +107,7 @@ class HonchoSessionManager:
             return self._peers_cache[cache_key]
 
         if is_assistant:
-            peer = self.honcho.peer(peer_id, config={"observe_me": False})
+            peer = self.honcho.peer(peer_id, configuration=PeerConfig(observe_me=False))
         else:
             peer = self.honcho.peer(peer_id)
 
