@@ -13,6 +13,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import DiscordConfig
+from nanobot.utils.chunking import chunk_message
 
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
@@ -73,37 +74,46 @@ class DiscordChannel(BaseChannel):
             self._http = None
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through Discord REST API."""
+        """Send a message through Discord REST API, chunking if needed."""
         if not self._http:
             logger.warning("Discord HTTP client not initialized")
             return
 
         url = f"{DISCORD_API_BASE}/channels/{msg.chat_id}/messages"
-        payload: dict[str, Any] = {"content": msg.content}
-
-        if msg.reply_to:
-            payload["message_reference"] = {"message_id": msg.reply_to}
-            payload["allowed_mentions"] = {"replied_user": False}
-
         headers = {"Authorization": f"Bot {self.config.token}"}
 
+        # Split message into chunks respecting Discord's 2000 char limit
+        chunks = list(chunk_message(msg.content))
+
         try:
-            for attempt in range(3):
-                try:
-                    response = await self._http.post(url, headers=headers, json=payload)
-                    if response.status_code == 429:
-                        data = response.json()
-                        retry_after = float(data.get("retry_after", 1.0))
-                        logger.warning(f"Discord rate limited, retrying in {retry_after}s")
-                        await asyncio.sleep(retry_after)
-                        continue
-                    response.raise_for_status()
-                    return
-                except Exception as e:
-                    if attempt == 2:
-                        logger.error(f"Error sending Discord message: {e}")
-                    else:
-                        await asyncio.sleep(1)
+            for i, chunk_content in enumerate(chunks):
+                payload: dict[str, Any] = {"content": chunk_content}
+
+                # Only add reply reference to first chunk
+                if i == 0 and msg.reply_to:
+                    payload["message_reference"] = {"message_id": msg.reply_to}
+                    payload["allowed_mentions"] = {"replied_user": False}
+
+                for attempt in range(3):
+                    try:
+                        response = await self._http.post(url, headers=headers, json=payload)
+                        if response.status_code == 429:
+                            data = response.json()
+                            retry_after = float(data.get("retry_after", 1.0))
+                            logger.warning(f"Discord rate limited, retrying in {retry_after}s")
+                            await asyncio.sleep(retry_after)
+                            continue
+                        response.raise_for_status()
+                        break
+                    except Exception as e:
+                        if attempt == 2:
+                            logger.error(f"Error sending Discord message chunk {i+1}/{len(chunks)}: {e}")
+                        else:
+                            await asyncio.sleep(1)
+
+                # Small delay between chunks to avoid rate limiting
+                if i < len(chunks) - 1:
+                    await asyncio.sleep(0.5)
         finally:
             await self._stop_typing(msg.chat_id)
 

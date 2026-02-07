@@ -149,6 +149,19 @@ class HonchoSessionManager:
         try:
             ctx = session.context(summary=True, tokens=self._context_tokens)
             existing_messages = ctx.messages or []
+
+            # Verify chronological ordering
+            if existing_messages and len(existing_messages) > 1:
+                timestamps = [m.created_at for m in existing_messages if m.created_at]
+                if timestamps and timestamps != sorted(timestamps):
+                    logger.warning(
+                        f"Honcho messages not chronologically ordered for session '{session_id}', sorting"
+                    )
+                    existing_messages = sorted(
+                        existing_messages,
+                        key=lambda m: m.created_at or datetime.min,
+                    )
+
             if existing_messages:
                 logger.info(f"Honcho session '{session_id}' retrieved ({len(existing_messages)} existing messages)")
             else:

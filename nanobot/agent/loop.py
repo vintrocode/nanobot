@@ -20,7 +20,9 @@ from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.honcho import HonchoTool
+from nanobot.agent.tools.prompt_edit import HonchoGuidedEditTool
 from nanobot.agent.subagent import SubagentManager
+from nanobot.agent.budget import SpendBudget
 
 
 class AgentLoop:
@@ -42,6 +44,9 @@ class AgentLoop:
         workspace: Path,
         model: str | None = None,
         max_iterations: int = 20,
+        max_spend_dollars: float | None = None,
+        input_price_per_million: float = 15.0,
+        output_price_per_million: float = 75.0,
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         cron_service: "CronService | None" = None,
@@ -57,6 +62,9 @@ class AgentLoop:
         self.workspace = workspace
         self.model = model or provider.get_default_model()
         self.max_iterations = max_iterations
+        self.max_spend_dollars = max_spend_dollars
+        self.input_price_per_million = input_price_per_million
+        self.output_price_per_million = output_price_per_million
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
@@ -133,12 +141,19 @@ class AgentLoop:
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
 
-        # Honcho tool (for querying user context)
+        # Honcho tools (for querying user context and guided prompt editing)
         if self.honcho_enabled:
             from nanobot.honcho.session import HonchoSessionManager
             if isinstance(self.sessions, HonchoSessionManager):
                 honcho_tool = HonchoTool(session_manager=self.sessions)
                 self.tools.register(honcho_tool)
+
+                # Honcho-guided prompt editing tool
+                prompt_edit_tool = HonchoGuidedEditTool(
+                    workspace=self.workspace,
+                    session_manager=self.sessions,
+                )
+                self.tools.register(prompt_edit_tool)
     
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
@@ -217,6 +232,11 @@ class AgentLoop:
         if isinstance(honcho_tool, HonchoTool):
             honcho_tool.set_context(msg.session_key)
 
+        # Update prompt edit tool context
+        prompt_edit_tool = self.tools.get("edit_prompt")
+        if isinstance(prompt_edit_tool, HonchoGuidedEditTool):
+            prompt_edit_tool.set_context(msg.session_key)
+
         # Pre-fetch user context from Honcho if enabled
         user_context = None
         if self.honcho_enabled and self.honcho_prefetch:
@@ -227,6 +247,11 @@ class AgentLoop:
                 except Exception as e:
                     logger.warning(f"Failed to pre-fetch Honcho context: {e}")
 
+        # Pass user context to spawn tool for subagents
+        spawn_tool = self.tools.get("spawn")
+        if isinstance(spawn_tool, SpawnTool):
+            spawn_tool.set_user_context(user_context)
+
         # Build initial messages (use get_history for LLM-formatted messages)
         messages = self.context.build_messages(
             history=session.get_history(),
@@ -236,21 +261,47 @@ class AgentLoop:
             chat_id=msg.chat_id,
             user_context=user_context,
         )
-        
+
+        # Create budget tracker for this request
+        budget = None
+        if self.max_spend_dollars:
+            budget = SpendBudget(
+                max_spend_dollars=self.max_spend_dollars,
+                input_price_per_million=self.input_price_per_million,
+                output_price_per_million=self.output_price_per_million,
+            )
+            # Pass budget to subagent manager
+            self.subagents.set_shared_budget(budget)
+
         # Agent loop
         iteration = 0
         final_content = None
-        
+        budget_exhausted = False
+
         while iteration < self.max_iterations:
             iteration += 1
-            
+
+            # Check budget before LLM call
+            if budget and budget.is_exhausted:
+                budget_exhausted = True
+                break
+
             # Call LLM
             response = await self.provider.chat(
                 messages=messages,
                 tools=self.tools.get_definitions(),
                 model=self.model
             )
-            
+
+            # Track spend
+            if budget and response.usage:
+                budget.add_usage(
+                    response.usage.get("prompt_tokens", 0),
+                    response.usage.get("completion_tokens", 0),
+                    source="agent",
+                )
+                logger.debug(f"Budget: {budget.get_summary()}")
+
             # Handle tool calls
             if response.has_tool_calls:
                 # Add assistant message with tool calls
@@ -268,7 +319,7 @@ class AgentLoop:
                 messages = self.context.add_assistant_message(
                     messages, response.content, tool_call_dicts
                 )
-                
+
                 # Execute tools
                 for tool_call in response.tool_calls:
                     args_str = json.dumps(tool_call.arguments)
@@ -281,8 +332,14 @@ class AgentLoop:
                 # No tool calls, we're done
                 final_content = response.content
                 break
-        
-        if final_content is None:
+
+        # Handle budget exhaustion
+        if budget_exhausted and budget:
+            final_content = (
+                f"I've reached my budget limit for this request. "
+                f"{budget.get_summary()}"
+            )
+        elif final_content is None:
             final_content = "I've completed processing but have no response to give."
         
         # Save to session
@@ -336,6 +393,11 @@ class AgentLoop:
         honcho_tool = self.tools.get("query_user_context")
         if isinstance(honcho_tool, HonchoTool):
             honcho_tool.set_context(session_key)
+
+        # Update prompt edit tool context
+        prompt_edit_tool = self.tools.get("edit_prompt")
+        if isinstance(prompt_edit_tool, HonchoGuidedEditTool):
+            prompt_edit_tool.set_context(session_key)
 
         # Pre-fetch user context from Honcho if enabled
         user_context = None
